@@ -1,0 +1,58 @@
+# Cargar bibliotecas
+import pandas as pd
+from sklearn.tree import DecisionTreeClassifier, plot_tree  # Importar el clasificador de Árbol de Decisión
+from sklearn.model_selection import train_test_split  # Importar la función train_test_split
+from sklearn import metrics  # Importar el módulo de métricas de scikit-learn
+import matplotlib.pyplot as plt
+
+# Cargar datos desde un archivo CSV local
+nombre_archivo = 'diabetes.csv'
+df = pd.read_csv(nombre_archivo)
+
+# Ver las primeras filas del DataFrame
+print(df.head())
+
+# Definir las características y la variable objetivo
+feature_cols = ['Pregnancies', 'Insulin', 'BMI', 'Age', 'Glucose', 'BloodPressure', 'DiabetesPedigreeFunction']
+X = df[feature_cols]  # Características
+y = df['Outcome']  # Variable objetivo
+
+# Dividir el dataset en conjunto de entrenamiento y conjunto de prueba
+# 70% entrenamiento y 30% prueba
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=1)
+
+# Crear objeto clasificador de Árbol de Decisión
+clf = DecisionTreeClassifier()
+
+# Entrenar el clasificador de Árbol de Decisión
+clf = clf.fit(X_train, y_train)
+
+# Predecir la respuesta para el conjunto de prueba
+y_pred = clf.predict(X_test)
+
+# Precisión del modelo
+print("Accuracy:", metrics.accuracy_score(y_test, y_pred))
+
+# Graficar el Árbol de Decisión
+plt.figure(figsize=(20,10))  # Ajustar el tamaño de la figura
+plot_tree(clf, feature_names=feature_cols, class_names=['No Diabetes', 'Diabetes'], filled=True)
+plt.title('Árbol de Decisión')
+plt.show()
+
+# Crear un DataFrame con los datos de entrada
+input_data = pd.DataFrame({
+    'Pregnancies': [0],
+    'Insulin': [150],
+    'BMI': [22],
+    'Age': [22],
+    'Glucose': [85],
+    'BloodPressure': [65],
+    'DiabetesPedigreeFunction': [0.5]
+})
+
+# Realizar la predicción
+prediction = clf.predict(input_data)
+
+# Mostrar el resultado
+result = 'Diabetes' if prediction[0] == 1 else 'No Diabetes'
+print(f'La predicción para los datos proporcionados es: {result}')
