@@ -1,0 +1,58 @@
+import os
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_squared_error, r2_score
+
+# Verificar el directorio de trabajo actual
+print("Directorio de trabajo actual:", os.getcwd())
+
+# Listar archivos en el directorio actual
+print("Archivos en el directorio actual:", os.listdir('.'))
+
+# Nombre del archivo Excel local en la misma carpeta
+nombre_archivo = 'advertising.xlsx'
+
+# Verificar si el archivo existe
+if os.path.exists(nombre_archivo):
+    print("El archivo existe.")
+    # Cargar datos desde el archivo Excel
+    data = pd.read_excel(nombre_archivo)
+    print(data.head())
+
+    # Visualización inicial
+    plt.scatter(data['TV'], data['Sales'])
+    plt.xlabel('TV')
+    plt.ylabel('Sales')
+    plt.title('Relación entre TV y Sales')
+    plt.show()
+
+    # Dividir datos en conjunto de entrenamiento y prueba
+    X = data[['TV']]
+    y = data['Sales']
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+    # Crear y entrenar el modelo de regresión lineal
+    model = LinearRegression()
+    model.fit(X_train, y_train)
+
+    # Hacer predicciones
+    y_pred = model.predict(X_test)
+
+    # Calcular métricas
+    mse = mean_squared_error(y_test, y_pred)
+    r2 = r2_score(y_test, y_pred)
+    print(f'MSE: {mse}')
+    print(f'R^2: {r2}')
+
+    # Visualización de resultados
+    plt.scatter(X_test, y_test, color='blue', label='Datos reales')
+    plt.plot(X_test, y_pred, color='red', label='Línea de regresión')
+    plt.xlabel('TV')
+    plt.ylabel('Sales')
+    plt.title('Regresión Lineal: TV vs Sales')
+    plt.legend()
+    plt.show()
+else:
+    print("El archivo no se encuentra en la ruta especificada.")
