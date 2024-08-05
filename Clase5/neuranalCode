@@ -1,0 +1,158 @@
+import pandas as pd
+import numpy as np
+from sklearn.preprocessing import MinMaxScaler
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import LSTM, Dense
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+
+# Cargar datos desde el archivo CSV local
+nombre_archivo = 'SP500.csv'
+df = pd.read_csv(nombre_archivo)
+
+# Convertir Fecha a formato de fecha y hora, ajustando el formato y usando dayfirst=True si es necesario
+df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True)
+
+# Convertir columna 'Ultimo' a tipo numérico, manejando el formato europeo
+def convert_to_float(value):
+    if isinstance(value, str):
+        value = value.replace('.', '').replace(',', '.')
+        try:
+            return float(value)
+        except ValueError:
+            return np.nan
+    return value
+
+df['Ultimo'] = df['Ultimo'].apply(convert_to_float)
+
+# Seleccionar columnas necesarias
+df = df[['Fecha', 'Ultimo', 'Apertura', 'Maximo', 'Minimo']]
+
+# Establecer Fecha como índice
+df.set_index('Fecha', inplace=True)
+
+# Ordenar por Fecha
+df.sort_index(inplace=True)
+
+# Verificar si hay valores nulos
+print("Valores nulos antes de rellenar:", df.isnull().sum())
+
+# Rellenar valores nulos si es necesario
+df.fillna(method='ffill', inplace=True)
+print("Valores nulos después de rellenar:", df.isnull().sum())
+
+# Normalizar los precios
+scaler = MinMaxScaler(feature_range=(0, 1))
+df['Ultimo_scaled'] = scaler.fit_transform(df[['Ultimo']])
+
+# Crear el conjunto de datos
+def create_dataset(data, time_step=1):
+    X, y = [], []
+    for i in range(len(data) - time_step - 1):
+        X.append(data[i:(i + time_step), 0])
+        y.append(data[i + time_step, 0])
+    return np.array(X), np.array(y)
+
+time_step = 10
+scaled_data = df[['Ultimo_scaled']].values
+X, y = create_dataset(scaled_data, time_step)
+
+# Dividir en conjuntos de entrenamiento y prueba
+train_size = int(len(X) * 0.8)
+X_train, X_test = X[:train_size], X[train_size:]
+y_train, y_test = y[:train_size], y[train_size:]
+
+# Redimensionar para LSTM [muestras, pasos de tiempo, características]
+X_train = X_train.reshape((X_train.shape[0], X_train.shape[1], 1))
+X_test = X_test.reshape((X_test.shape[0], X_test.shape[1], 1))
+
+# Construir el modelo LSTM
+model = Sequential()
+model.add(LSTM(50, return_sequences=True, input_shape=(time_step, 1)))
+model.add(LSTM(50))
+model.add(Dense(1))
+
+# Compilar el modelo
+model.compile(optimizer='adam', loss='mean_squared_error')
+
+# Entrenar el modelo
+history = model.fit(X_train, y_train, epochs=20, batch_size=1, verbose=1, validation_data=(X_test, y_test))
+
+# Generar predicciones futuras
+def predict_future(model, last_sequence, n_future_steps):
+    future_predictions = []
+    current_sequence = last_sequence.reshape((1, time_step, 1))
+    
+    for _ in range(n_future_steps):
+        pred = model.predict(current_sequence)[0, 0]
+        future_predictions.append(pred)
+        
+        # Actualizar la secuencia para la próxima predicción
+        current_sequence = np.roll(current_sequence, shift=-1)
+        current_sequence[0, -1, 0] = pred
+    
+    return np.array(future_predictions)
+
+# Última secuencia para predicción futura
+last_sequence = scaled_data[-time_step:]
+n_future_steps = 90  # 3 meses de datos (aprox.)
+
+# Comprobar forma de last_sequence
+print("Forma de last_sequence:", last_sequence.shape)
+
+future_predictions = predict_future(model, last_sequence, n_future_steps)
+
+# Desnormalizar las predicciones
+future_predictions = scaler.inverse_transform(future_predictions.reshape(-1, 1))
+
+# Crear DataFrame para predicciones futuras
+last_date = df.index[-1]
+future_dates = pd.date_range(start=last_date + pd.Timedelta(days=1), periods=n_future_steps, freq='D')
+predicted_future = pd.DataFrame({'Predicción_Futura_LSTM': future_predictions.flatten()}, index=future_dates)
+
+# Añadir Media Móvil al DataFrame original
+window_size = 10
+df['Media_Movil'] = df['Ultimo'].rolling(window=window_size).mean()
+
+# Visualizar resultados con predicciones futuras y Media Móvil
+plt.figure(figsize=(14,7))
+plt.plot(df.index, df['Ultimo'], label='Precios Reales', color='blue', alpha=0.5)
+plt.plot(df.index, df['Media_Movil'], label='Media Móvil', color='orange', linestyle='--')
+plt.plot(predicted_future.index, predicted_future['Predicción_Futura_LSTM'], label='Predicciones Futuras LSTM', color='red', linestyle='--')
+
+# Ajustar formato de fecha en el gráfico
+plt.title('Predicción con LSTM y Media Móvil para el Índice S&P 500')
+plt.xlabel('Fecha')
+plt.ylabel('Precio')
+plt.legend()
+plt.grid(True)
+plt.xticks(rotation=45)
+
+# Ajustar la frecuencia de los ticks del eje x
+plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%d-%m-%Y'))
+plt.gca().xaxis.set_major_locator(mdates.MonthLocator())  # Mostrar cada mes
+
+# Asegurarse de que el rango de fechas en el gráfico cubra el periodo deseado
+plt.xlim(df.index.min(), predicted_future.index.max())
+
+plt.tight_layout()
+plt.show()
+
+# Realizar predicciones en el conjunto de prueba
+y_pred_scaled = model.predict(X_test)
+
+# Desnormalizar las predicciones
+y_pred = scaler.inverse_transform(y_pred_scaled)
+
+# Desnormalizar los datos reales
+y_test = scaler.inverse_transform(y_test.reshape(-1, 1))
+
+# Calcular RMSE, MAE y R²
+rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+mae = mean_absolute_error(y_test, y_pred)
+r2 = r2_score(y_test, y_pred)
+
+print(f'RMSE: {rmse}')
+print(f'MAE: {mae}')
+print(f'R²: {r2}')
