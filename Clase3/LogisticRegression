@@ -1,0 +1,74 @@
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, classification_report
+import pandas as pd
+import os
+
+# Verificar el directorio de trabajo actual
+print("Directorio de trabajo actual:", os.getcwd())
+
+# Listar archivos en el directorio actual
+print("Archivos en el directorio actual:", os.listdir('.'))
+
+# Nombre del archivo Excel local en la misma carpeta
+nombre_archivo = 'medical_diagnosis.xlsx'
+
+# Verificar si el archivo existe
+if os.path.exists(nombre_archivo):
+    print("El archivo existe.")
+    data = pd.read_excel(nombre_archivo)
+    print(data.head())
+    
+    # Separar características y variable de destino
+    X = data[['glucosa', 'presion_arterial', 'imc']]
+    y = data['diagnosis']
+
+    # Dividir en conjuntos de entrenamiento y prueba
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+    # Crear y entrenar el modelo de regresión logística
+    model = LogisticRegression()
+    model.fit(X_train, y_train)
+
+    # Realizar predicciones
+    y_pred = model.predict(X_test)
+
+    # Evaluar el rendimiento del modelo
+    accuracy = accuracy_score(y_test, y_pred)
+    precision = precision_score(y_test, y_pred, average='binary')
+    recall = recall_score(y_test, y_pred, average='binary')
+    f1 = f1_score(y_test, y_pred, average='binary')
+
+    print(classification_report(y_test, y_pred))
+    print(f'Accuracy: {accuracy}')
+    print(f'Precision: {precision}')
+    print(f'Recall: {recall}')
+    print(f'F1-Score: {f1}')
+else:
+    print("El archivo no se encuentra en la ruta especificada.")
+
+def predict_diabetes(imc, presion_arterial, glucosa, threshold):
+    # Crear un DataFrame con los datos de entrada usando las mismas columnas y el mismo orden
+    new_data = pd.DataFrame({
+        'glucosa': [glucosa],
+        'presion_arterial': [presion_arterial],
+        'imc': [imc]
+    })
+    
+    # Hacer la predicción de probabilidad
+    probability = model.predict_proba(new_data)
+
+    # Ajusta el umbral de decisión
+    prediction = 1 if probability[0][1] >= threshold else 0
+
+    # Mostrar resultados
+    result = 'Diabetes' if prediction == 1 else 'No Diabetes'
+    print(f"Predicción: {result}")
+
+# Valores para la predicción
+imc = 25.0  # Ejemplo de IMC en el rango típico
+presion_arterial = 80  # Ejemplo de presión arterial
+glucosa = 120  # Ejemplo de nivel de glucosa en sangre
+
+# Hacer la predicción con los valores proporcionados
+predict_diabetes(imc, presion_arterial, glucosa, 0.6)
